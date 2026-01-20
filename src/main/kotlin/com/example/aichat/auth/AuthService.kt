@@ -10,7 +10,8 @@ import org.springframework.stereotype.Service
 class AuthService(
 	private val userRepository: UserRepository,
 	private val passwordEncoder: PasswordEncoder,
-	private val jwtService: JwtService
+	private val jwtService: JwtService,
+	private val activityLogService: com.example.aichat.report.ActivityLogService
 ) {
 	fun signup(request: SignupRequest): AuthResponse {
 		if (userRepository.existsByEmail(request.email)) {
@@ -24,6 +25,7 @@ class AuthService(
 		)
 		val saved = userRepository.save(user)
 		val token = jwtService.createAccessToken(saved.id!!, saved.email, saved.role)
+		activityLogService.record(saved.id!!, com.example.aichat.report.ActivityLogType.SIGNUP)
 		return AuthResponse(token, saved.id.toString(), saved.role.name)
 	}
 
@@ -34,6 +36,7 @@ class AuthService(
 			throw IllegalArgumentException("Invalid credentials")
 		}
 		val token = jwtService.createAccessToken(user.id!!, user.email, user.role)
+		activityLogService.record(user.id!!, com.example.aichat.report.ActivityLogType.LOGIN)
 		return AuthResponse(token, user.id.toString(), user.role.name)
 	}
 }

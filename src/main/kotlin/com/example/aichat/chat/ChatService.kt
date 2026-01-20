@@ -16,7 +16,8 @@ import java.util.UUID
 class ChatService(
 	private val threadRepository: ThreadRepository,
 	private val chatRepository: ChatRepository,
-	private val openAiClient: OpenAiClient
+	private val openAiClient: OpenAiClient,
+	private val activityLogService: com.example.aichat.report.ActivityLogService
 ) {
 	private val threadTimeout = Duration.ofMinutes(30)
 
@@ -35,6 +36,7 @@ class ChatService(
 		val answer = completion.choices.firstOrNull()?.message?.content ?: ""
 
 		thread.lastQuestionAt = now
+		activityLogService.record(principal.userId, com.example.aichat.report.ActivityLogType.CHAT)
 		val chat = ChatEntity(
 			thread = thread,
 			question = request.question,
