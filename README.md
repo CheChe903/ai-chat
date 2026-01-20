@@ -2,12 +2,6 @@
 
 Kotlin + Spring Boot 기반의 AI 챗봇 서비스 데모입니다.
 
-## Requirements
-
-- JDK 17
-- Docker (for local Postgres)
-- OpenAI API Key (유료 API 플랜 필요)
-
 ## Quick Start
 
 ```bash
@@ -157,16 +151,3 @@ SSE 응답은 이벤트 타입으로 구분됩니다.
 4) 운영 고도화 단계
 - 관리자 대시보드 및 메트릭 시각화
 - 배치 리포트/알림 자동화
-
-## 확장 가능한 부분 (리스트업)
-
-- 다중 LLM Provider 지원(OpenAI 외 Claude, Gemini 등)
-- 파일 업로드/임베딩/벡터DB 연동(RAG)
-- 요약/메모리 고도화(요약 품질 평가, 자동 재요약)
-- 관리자 대시보드 및 메트릭 시각화
-- 권한/조직 단위 멀티테넌시 확장
-- 배치 리포트 스케줄링(일/주/월 단위)
-
-## Notes
-
-- ChatGPT Plus 구독만으로는 API 호출 권한이 없습니다. OpenAI API 키와 결제 활성화가 필요합니다.
