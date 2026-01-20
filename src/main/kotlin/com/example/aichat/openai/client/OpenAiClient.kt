@@ -79,9 +79,29 @@ class OpenAiClient(
 			}
 			try {
 				val node = objectMapper.readTree(data)
-				val content = node["choices"]?.get(0)?.get("delta")?.get("content")?.asText()
+				val delta = node["choices"]?.get(0)?.get("delta")
+				val content = delta?.get("content")?.asText()
 				if (!content.isNullOrBlank()) {
 					results.add(content)
+				}
+				val toolCalls = delta?.get("tool_calls")
+				if (toolCalls != null && toolCalls.isArray) {
+					for (toolCall in toolCalls) {
+						val function = toolCall.get("function")
+						val name = function?.get("name")?.asText()
+						val arguments = function?.get("arguments")?.asText()
+						val text = buildString {
+							append("[tool_call")
+							if (!name.isNullOrBlank()) {
+								append(":").append(name)
+							}
+							if (!arguments.isNullOrBlank()) {
+								append(" ").append(arguments)
+							}
+							append("]")
+						}
+						results.add(text)
+					}
 				}
 			} catch (_: Exception) {
 				// ignore malformed chunks

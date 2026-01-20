@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 import java.time.Duration
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
 
 @RestController
 @RequestMapping("/api")
@@ -40,17 +41,45 @@ class ChatController(
 			throw ApiException(ErrorCode.BAD_REQUEST, "isStreaming=true is required for SSE")
 		}
 		val emitter = SseEmitter(Duration.ofMinutes(5).toMillis())
-		Thread {
-			try {
-				val response = chatService.streamChat(request) { chunk ->
+		val closed = AtomicBoolean(false)
+		val session = chatService.streamChat(
+			request,
+			onChunk = { chunk ->
+				if (!closed.get()) {
 					emitter.send(SseEmitter.event().name("delta").data(ApiResponse.ok(chunk)))
 				}
-				emitter.send(SseEmitter.event().name("complete").data(ApiResponse.ok(response)))
-				emitter.complete()
-			} catch (ex: Exception) {
-				emitter.completeWithError(ex)
+			},
+			onComplete = { response ->
+				if (!closed.getAndSet(true)) {
+					emitter.send(SseEmitter.event().name("complete").data(ApiResponse.ok(response)))
+					emitter.complete()
+				}
+			},
+			onError = { ex ->
+				if (!closed.getAndSet(true)) {
+					emitter.send(SseEmitter.event().name("error")
+						.data(ApiResponse.error(ErrorCode.INTERNAL_ERROR, ex.message)))
+					emitter.complete()
+				}
 			}
-		}.start()
+		)
+
+		emitter.onCompletion {
+			closed.set(true)
+			session.cancel()
+			session.disposable.dispose()
+		}
+		emitter.onTimeout {
+			closed.set(true)
+			session.cancel()
+			session.disposable.dispose()
+		}
+		emitter.onError {
+			closed.set(true)
+			session.cancel()
+			session.disposable.dispose()
+		}
+
 		return emitter
 	}
 

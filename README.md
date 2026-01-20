@@ -40,6 +40,16 @@ Kotlin + Spring Boot 기반의 AI 챗봇 서비스 데모입니다.
 - `GET /api/admin/stats` (admin)
 - `GET /api/admin/reports/chats` (admin, CSV)
 
+## SSE Streaming
+
+SSE 응답은 이벤트 타입으로 구분됩니다.
+
+- `delta`: 토큰 조각 (`ApiResponse.ok("...")`)
+- `complete`: 최종 응답 (`ApiResponse.ok(ChatResponse)`)
+- `error`: 오류 (`ApiResponse.error(...)`)
+
+연결이 중간에 끊기면 스트림은 취소되고, 부분 응답은 `(incomplete)` 표시로 저장됩니다.
+
 ## 과제 분석
 
 - 요구사항의 핵심은 인증 기반의 멀티 테넌트 대화 관리와, 관리자를 위한 관측/보고 기능입니다.

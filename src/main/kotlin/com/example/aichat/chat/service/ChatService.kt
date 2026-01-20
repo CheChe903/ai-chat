@@ -19,14 +19,14 @@ import com.example.aichat.user.domain.UserRole
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Sort
 import org.springframework.stereotype.Service
-import org.springframework.transaction.annotation.Transactional
+import reactor.core.Disposable
 import java.time.Duration
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
 
 @Service
-@Transactional
 class ChatService(
 	private val threadRepository: ThreadRepository,
 	private val chatRepository: ChatRepository,
@@ -54,27 +54,60 @@ class ChatService(
 		return saved.toResponse()
 	}
 
-	fun streamChat(request: ChatCreateRequest, onChunk: (String) -> Unit): ChatResponse {
+	fun streamChat(
+		request: ChatCreateRequest,
+		onChunk: (String) -> Unit,
+		onComplete: (ChatResponse) -> Unit,
+		onError: (Throwable) -> Unit
+	): ChatStreamSession {
 		val principal = currentUser()
 		val now = Instant.now()
 		val thread = resolveThread(principal.userId, now)
 		val messages = buildMessages(thread, request.question)
+		val buffer = StringBuilder()
+		val finished = AtomicBoolean(false)
 
-		val chunks = openAiClient.streamChatCompletion(messages, request.model)
-			.doOnNext { onChunk(it) }
-			.collectList()
-			.block() ?: emptyList()
-		val answer = chunks.joinToString("")
+		fun finalizeStream(incomplete: Boolean): ChatResponse? {
+			if (finished.getAndSet(true)) {
+				return null
+			}
+			val answer = buffer.toString()
+			if (answer.isBlank() && incomplete) {
+				return null
+			}
+			val storedAnswer = if (incomplete) "${answer} (incomplete)" else answer
+			thread.lastQuestionAt = now
+			activityLogService.record(principal.userId, ActivityLogType.CHAT)
+			val chat = Chat(
+				thread = thread,
+				question = request.question,
+				answer = storedAnswer
+			)
+			val saved = chatRepository.save(chat)
+			return saved.toResponse()
+		}
 
-		thread.lastQuestionAt = now
-		activityLogService.record(principal.userId, ActivityLogType.CHAT)
-		val chat = Chat(
-			thread = thread,
-			question = request.question,
-			answer = answer
+		val disposable = openAiClient.streamChatCompletion(messages, request.model)
+			.doOnNext { chunk ->
+				buffer.append(chunk)
+				onChunk(chunk)
+			}
+			.doOnComplete {
+				val response = finalizeStream(false)
+				if (response != null) {
+					onComplete(response)
+				}
+			}
+			.doOnError { ex ->
+				finalizeStream(true)
+				onError(ex)
+			}
+			.subscribe()
+
+		return ChatStreamSession(
+			disposable = disposable,
+			cancel = { finalizeStream(true) }
 		)
-		val saved = chatRepository.save(chat)
-		return saved.toResponse()
 	}
 
 	fun listChats(page: Int, size: Int, sort: Sort.Direction): ThreadChatPageResponse {
@@ -152,3 +185,8 @@ class ChatService(
 
 	private fun currentUser() = SecurityUtil.currentUser()
 }
+
+data class ChatStreamSession(
+	val disposable: Disposable,
+	val cancel: () -> Unit
+)
