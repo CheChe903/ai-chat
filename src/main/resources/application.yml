@@ -1,0 +1,35 @@
+spring:
+  application:
+    name: ai-chat
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/ai_chat}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+  jackson:
+    time-zone: UTC
+
+app:
+  jwt:
+    issuer: ai-chat
+    secret: ${JWT_SECRET:change-me-in-prod}
+    access-token-minutes: 60
+  openai:
+    api-key: ${OPENAI_API_KEY:}
+    base-url: ${OPENAI_BASE_URL:https://api.openai.com}
+    model: ${OPENAI_MODEL:gpt-4o-mini}
+    connect-timeout-ms: 30000
+    read-timeout-ms: 60000
+
+server:
+  port: 8080
+
+logging:
+  level:
+    org.hibernate.SQL: debug
