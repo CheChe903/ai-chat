@@ -1,55 +1,65 @@
 package com.example.aichat.openai.client
 
 import com.example.aichat.config.AppProperties
+import com.example.aichat.llm.LlmClient
+import com.example.aichat.llm.LlmCompletionChoice
+import com.example.aichat.llm.LlmCompletionResponse
+import com.example.aichat.llm.LlmMessage
 import com.fasterxml.jackson.databind.ObjectMapper
+import org.springframework.context.annotation.Primary
 import org.springframework.http.MediaType
 import org.springframework.stereotype.Component
 import org.springframework.web.reactive.function.client.WebClient
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
 
+@Primary
 @Component
 class OpenAiClient(
 	private val appProperties: AppProperties,
 	private val webClient: WebClient,
 	private val objectMapper: ObjectMapper
-) {
-	fun createChatCompletion(
-		messages: List<ChatMessage>,
+) : LlmClient {
+	override fun createChatCompletion(
+		messages: List<LlmMessage>,
 		modelOverride: String?
-	): ChatCompletionResponse {
+	): LlmCompletionResponse {
 		val apiKey = appProperties.openai.apiKey
 		if (apiKey.isBlank()) {
-			return ChatCompletionResponse(
+			return LlmCompletionResponse(
 				choices = listOf(
-					Choice(message = ChatMessage(role = "assistant", content = "OPENAI_API_KEY not configured"))
+					LlmCompletionChoice(message = LlmMessage(role = "assistant", content = "OPENAI_API_KEY not configured"))
 				)
 			)
 		}
-		val request = ChatCompletionRequest(
+		val request = OpenAiChatCompletionRequest(
 			model = modelOverride ?: appProperties.openai.model,
 			messages = messages,
 			stream = false
 		)
-		return webClient.post()
+		val response = webClient.post()
 			.uri("/v1/chat/completions")
 			.header("Authorization", "Bearer $apiKey")
 			.bodyValue(request)
 			.retrieve()
-			.bodyToMono(ChatCompletionResponse::class.java)
-			.onErrorResume { Mono.just(ChatCompletionResponse.error(it.message ?: "openai error")) }
-			.block() ?: ChatCompletionResponse.error("openai response empty")
+			.bodyToMono(OpenAiChatCompletionResponse::class.java)
+			.onErrorResume { Mono.just(OpenAiChatCompletionResponse.error(it.message ?: "openai error")) }
+			.block()
+
+		return response?.toLlmResponse() ?: LlmCompletionResponse(
+			choices = listOf(LlmCompletionChoice(LlmMessage("assistant", "openai response empty")))
+		)
 	}
 
-	fun streamChatCompletion(
-		messages: List<ChatMessage>,
+	override fun streamChatCompletion(
+		messages: List<LlmMessage>,
 		modelOverride: String?
 	): Flux<String> {
 		val apiKey = appProperties.openai.apiKey
 		if (apiKey.isBlank()) {
 			return Flux.just("OPENAI_API_KEY not configured")
 		}
-		val request = ChatCompletionRequest(
+		val request = OpenAiChatCompletionRequest(
 			model = modelOverride ?: appProperties.openai.model,
 			messages = messages,
 			stream = true
@@ -111,29 +121,30 @@ class OpenAiClient(
 	}
 }
 
-class ChatCompletionRequest(
+data class OpenAiChatCompletionRequest(
 	val model: String,
-	val messages: List<ChatMessage>,
+	val messages: List<LlmMessage>,
 	val stream: Boolean
 )
 
-class ChatMessage(
-	val role: String,
-	val content: String
-)
-
-class ChatCompletionResponse(
-	val choices: List<Choice>
+data class OpenAiChatCompletionResponse(
+	val choices: List<OpenAiChoice>
 ) {
 	companion object {
-		fun error(message: String): ChatCompletionResponse {
-			return ChatCompletionResponse(
-				choices = listOf(Choice(ChatMessage("assistant", message)))
+		fun error(message: String): OpenAiChatCompletionResponse {
+			return OpenAiChatCompletionResponse(
+				choices = listOf(OpenAiChoice(LlmMessage("assistant", message)))
 			)
 		}
 	}
+
+	fun toLlmResponse(): LlmCompletionResponse {
+		return LlmCompletionResponse(
+			choices = choices.map { LlmCompletionChoice(it.message) }
+		)
+	}
 }
 
-class Choice(
-	val message: ChatMessage
+data class OpenAiChoice(
+	val message: LlmMessage
 )

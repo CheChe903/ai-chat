@@ -11,8 +11,8 @@ import com.example.aichat.chat.repository.ThreadRepository
 import com.example.aichat.common.ApiException
 import com.example.aichat.common.ErrorCode
 import com.example.aichat.common.SecurityUtil
-import com.example.aichat.openai.client.ChatMessage
-import com.example.aichat.openai.client.OpenAiClient
+import com.example.aichat.llm.LlmClient
+import com.example.aichat.llm.LlmMessage
 import com.example.aichat.report.domain.ActivityLogType
 import com.example.aichat.report.service.ActivityLogService
 import com.example.aichat.user.domain.UserRole
@@ -30,7 +30,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class ChatService(
 	private val threadRepository: ThreadRepository,
 	private val chatRepository: ChatRepository,
-	private val openAiClient: OpenAiClient,
+	private val llmClient: LlmClient,
 	private val activityLogService: ActivityLogService
 ) {
 	private val threadTimeout = Duration.ofMinutes(30)
@@ -40,7 +40,7 @@ class ChatService(
 		val now = Instant.now()
 		val thread = resolveThread(principal.userId, now)
 		val messages = buildMessages(thread, request.question)
-		val completion = openAiClient.createChatCompletion(messages, request.model)
+		val completion = llmClient.createChatCompletion(messages, request.model)
 		val answer = completion.choices.firstOrNull()?.message?.content ?: ""
 
 		thread.lastQuestionAt = now
@@ -87,7 +87,7 @@ class ChatService(
 			return saved.toResponse()
 		}
 
-		val disposable = openAiClient.streamChatCompletion(messages, request.model)
+		val disposable = llmClient.streamChatCompletion(messages, request.model)
 			.doOnNext { chunk ->
 				buffer.append(chunk)
 				onChunk(chunk)
@@ -162,14 +162,14 @@ class ChatService(
 		return latest
 	}
 
-	private fun buildMessages(thread: Thread, question: String): List<ChatMessage> {
+	private fun buildMessages(thread: Thread, question: String): List<LlmMessage> {
 		val history = chatRepository.findByThreadId(thread.id!!, Sort.by(Sort.Direction.ASC, "createdAt"))
-		val messages = mutableListOf<ChatMessage>()
+		val messages = mutableListOf<LlmMessage>()
 		for (chat in history) {
-			messages.add(ChatMessage(role = "user", content = chat.question))
-			messages.add(ChatMessage(role = "assistant", content = chat.answer))
+			messages.add(LlmMessage(role = "user", content = chat.question))
+			messages.add(LlmMessage(role = "assistant", content = chat.answer))
 		}
-		messages.add(ChatMessage(role = "user", content = question))
+		messages.add(LlmMessage(role = "user", content = question))
 		return messages
 	}
 
