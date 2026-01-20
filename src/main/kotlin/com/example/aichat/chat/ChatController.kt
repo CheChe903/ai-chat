@@ -36,8 +36,10 @@ class ChatController(
 		val emitter = SseEmitter(Duration.ofMinutes(5).toMillis())
 		Thread {
 			try {
-				val response = chatService.createChat(request)
-				emitter.send(response)
+				val response = chatService.streamChat(request) { chunk ->
+					emitter.send(SseEmitter.event().name("delta").data(chunk))
+				}
+				emitter.send(SseEmitter.event().name("complete").data(response))
 				emitter.complete()
 			} catch (ex: Exception) {
 				emitter.completeWithError(ex)

@@ -7,12 +7,14 @@ import com.example.aichat.user.UserRole
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Sort
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import java.time.Duration
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 
 @Service
+@Transactional
 class ChatService(
 	private val threadRepository: ThreadRepository,
 	private val chatRepository: ChatRepository,
@@ -25,15 +27,32 @@ class ChatService(
 		val principal = currentUser()
 		val now = Instant.now()
 		val thread = resolveThread(principal.userId, now)
-		val history = chatRepository.findByThreadId(thread.id!!, Sort.by(Sort.Direction.ASC, "createdAt"))
-		val messages = mutableListOf<ChatMessage>()
-		for (chat in history) {
-			messages.add(ChatMessage(role = "user", content = chat.question))
-			messages.add(ChatMessage(role = "assistant", content = chat.answer))
-		}
-		messages.add(ChatMessage(role = "user", content = request.question))
+		val messages = buildMessages(thread, request.question)
 		val completion = openAiClient.createChatCompletion(messages, request.model)
 		val answer = completion.choices.firstOrNull()?.message?.content ?: ""
+
+		thread.lastQuestionAt = now
+		activityLogService.record(principal.userId, com.example.aichat.report.ActivityLogType.CHAT)
+		val chat = ChatEntity(
+			thread = thread,
+			question = request.question,
+			answer = answer
+		)
+		val saved = chatRepository.save(chat)
+		return saved.toResponse()
+	}
+
+	fun streamChat(request: ChatCreateRequest, onChunk: (String) -> Unit): ChatResponse {
+		val principal = currentUser()
+		val now = Instant.now()
+		val thread = resolveThread(principal.userId, now)
+		val messages = buildMessages(thread, request.question)
+
+		val chunks = openAiClient.streamChatCompletion(messages, request.model)
+			.doOnNext { onChunk(it) }
+			.collectList()
+			.block() ?: emptyList()
+		val answer = chunks.joinToString("")
 
 		thread.lastQuestionAt = now
 		activityLogService.record(principal.userId, com.example.aichat.report.ActivityLogType.CHAT)
@@ -96,6 +115,17 @@ class ChatService(
 			return threadRepository.save(ThreadEntity(userId = userId, lastQuestionAt = now))
 		}
 		return latest
+	}
+
+	private fun buildMessages(thread: ThreadEntity, question: String): List<ChatMessage> {
+		val history = chatRepository.findByThreadId(thread.id!!, Sort.by(Sort.Direction.ASC, "createdAt"))
+		val messages = mutableListOf<ChatMessage>()
+		for (chat in history) {
+			messages.add(ChatMessage(role = "user", content = chat.question))
+			messages.add(ChatMessage(role = "assistant", content = chat.answer))
+		}
+		messages.add(ChatMessage(role = "user", content = question))
+		return messages
 	}
 
 	private fun ChatEntity.toResponse(): ChatResponse {
