@@ -8,6 +8,8 @@ import com.example.aichat.chat.dto.ThreadChatPageResponse
 import com.example.aichat.chat.dto.ThreadChatResponse
 import com.example.aichat.chat.repository.ChatRepository
 import com.example.aichat.chat.repository.ThreadRepository
+import com.example.aichat.common.ApiException
+import com.example.aichat.common.ErrorCode
 import com.example.aichat.common.SecurityUtil
 import com.example.aichat.openai.client.ChatMessage
 import com.example.aichat.openai.client.OpenAiClient
@@ -110,7 +112,7 @@ class ChatService(
 			threadRepository.existsByIdAndUserId(threadId, principal.userId)
 		}
 		if (!exists) {
-			throw IllegalArgumentException("Thread not found")
+			throw ApiException(ErrorCode.NOT_FOUND, "Thread not found")
 		}
 		threadRepository.deleteById(threadId)
 	}

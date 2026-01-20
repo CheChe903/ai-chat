@@ -4,9 +4,11 @@ import com.example.aichat.chat.dto.ChatCreateRequest
 import com.example.aichat.chat.dto.ChatResponse
 import com.example.aichat.chat.dto.ThreadChatPageResponse
 import com.example.aichat.chat.service.ChatService
+import com.example.aichat.common.ApiException
+import com.example.aichat.common.ApiResponse
+import com.example.aichat.common.ErrorCode
 import jakarta.validation.Valid
 import org.springframework.http.MediaType
-import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -25,25 +27,25 @@ class ChatController(
 	private val chatService: ChatService
 ) {
 	@PostMapping("/chats", produces = [MediaType.APPLICATION_JSON_VALUE])
-	fun createChat(@Valid @RequestBody request: ChatCreateRequest): ChatResponse {
+	fun createChat(@Valid @RequestBody request: ChatCreateRequest): ApiResponse<ChatResponse> {
 		if (request.isStreaming) {
-			throw IllegalArgumentException("Streaming request should use Accept: text/event-stream")
+			throw ApiException(ErrorCode.BAD_REQUEST, "Streaming request should use Accept: text/event-stream")
 		}
-		return chatService.createChat(request)
+		return ApiResponse.ok(chatService.createChat(request))
 	}
 
 	@PostMapping("/chats", produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
 	fun streamChat(@Valid @RequestBody request: ChatCreateRequest): SseEmitter {
 		if (!request.isStreaming) {
-			throw IllegalArgumentException("isStreaming=true is required for SSE")
+			throw ApiException(ErrorCode.BAD_REQUEST, "isStreaming=true is required for SSE")
 		}
 		val emitter = SseEmitter(Duration.ofMinutes(5).toMillis())
 		Thread {
 			try {
 				val response = chatService.streamChat(request) { chunk ->
-					emitter.send(SseEmitter.event().name("delta").data(chunk))
+					emitter.send(SseEmitter.event().name("delta").data(ApiResponse.ok(chunk)))
 				}
-				emitter.send(SseEmitter.event().name("complete").data(response))
+				emitter.send(SseEmitter.event().name("complete").data(ApiResponse.ok(response)))
 				emitter.complete()
 			} catch (ex: Exception) {
 				emitter.completeWithError(ex)
@@ -57,18 +59,18 @@ class ChatController(
 		@RequestParam(defaultValue = "0") page: Int,
 		@RequestParam(defaultValue = "20") size: Int,
 		@RequestParam(defaultValue = "desc") sort: String
-	): ThreadChatPageResponse {
+	): ApiResponse<ThreadChatPageResponse> {
 		val direction = if (sort.equals("asc", ignoreCase = true)) {
 			org.springframework.data.domain.Sort.Direction.ASC
 		} else {
 			org.springframework.data.domain.Sort.Direction.DESC
 		}
-		return chatService.listChats(page, size, direction)
+		return ApiResponse.ok(chatService.listChats(page, size, direction))
 	}
 
 	@DeleteMapping("/threads/{threadId}")
-	fun deleteThread(@PathVariable threadId: UUID): ResponseEntity<Void> {
+	fun deleteThread(@PathVariable threadId: UUID): ApiResponse<Unit> {
 		chatService.deleteThread(threadId)
-		return ResponseEntity.noContent().build()
+		return ApiResponse.ok(null)
 	}
 }

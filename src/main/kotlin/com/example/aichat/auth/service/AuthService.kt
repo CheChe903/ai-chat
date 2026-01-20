@@ -4,6 +4,8 @@ import com.example.aichat.auth.dto.AuthResponse
 import com.example.aichat.auth.dto.LoginRequest
 import com.example.aichat.auth.dto.SignupRequest
 import com.example.aichat.auth.security.JwtService
+import com.example.aichat.common.ApiException
+import com.example.aichat.common.ErrorCode
 import com.example.aichat.report.domain.ActivityLogType
 import com.example.aichat.report.service.ActivityLogService
 import com.example.aichat.user.domain.User
@@ -21,7 +23,7 @@ class AuthService(
 ) {
 	fun signup(request: SignupRequest): AuthResponse {
 		if (userRepository.existsByEmail(request.email)) {
-			throw IllegalArgumentException("Email already registered")
+			throw ApiException(ErrorCode.CONFLICT, "Email already registered")
 		}
 		val user = User(
 			email = request.email,
@@ -37,9 +39,9 @@ class AuthService(
 
 	fun login(request: LoginRequest): AuthResponse {
 		val user = userRepository.findByEmail(request.email)
-			?: throw IllegalArgumentException("Invalid credentials")
+			?: throw ApiException(ErrorCode.UNAUTHORIZED, "Invalid credentials")
 		if (!passwordEncoder.matches(request.password, user.passwordHash)) {
-			throw IllegalArgumentException("Invalid credentials")
+			throw ApiException(ErrorCode.UNAUTHORIZED, "Invalid credentials")
 		}
 		val token = jwtService.createAccessToken(user.id!!, user.email, user.role)
 		activityLogService.record(user.id!!, ActivityLogType.LOGIN)

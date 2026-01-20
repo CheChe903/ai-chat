@@ -8,7 +8,7 @@ object SecurityUtil {
 		val auth = SecurityContextHolder.getContext().authentication
 		val principal = auth?.principal
 		if (principal !is UserPrincipal) {
-			throw IllegalArgumentException("Unauthorized")
+			throw ApiException(ErrorCode.UNAUTHORIZED)
 		}
 		return principal
 	}

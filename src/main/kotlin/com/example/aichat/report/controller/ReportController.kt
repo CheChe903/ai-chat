@@ -1,5 +1,6 @@
 package com.example.aichat.report.controller
 
+import com.example.aichat.common.ApiResponse
 import com.example.aichat.report.dto.DailyStatsResponse
 import com.example.aichat.report.service.ActivityLogService
 import com.example.aichat.report.service.ReportService
@@ -19,8 +20,8 @@ class ReportController(
 ) {
 	@GetMapping("/stats")
 	@PreAuthorize("hasRole('ADMIN')")
-	fun stats(): DailyStatsResponse {
-		return activityLogService.dailyStats()
+	fun stats(): ApiResponse<DailyStatsResponse> {
+		return ApiResponse.ok(activityLogService.dailyStats())
 	}
 
 	@GetMapping("/reports/chats")

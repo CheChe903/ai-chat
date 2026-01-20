@@ -1,6 +1,8 @@
 package com.example.aichat.feedback.service
 
 import com.example.aichat.chat.repository.ChatRepository
+import com.example.aichat.common.ApiException
+import com.example.aichat.common.ErrorCode
 import com.example.aichat.common.SecurityUtil
 import com.example.aichat.feedback.domain.Feedback
 import com.example.aichat.feedback.domain.FeedbackStatus
@@ -25,14 +27,14 @@ class FeedbackService(
 		val principal = SecurityUtil.currentUser()
 		val chatId = UUID.fromString(request.chatId)
 		val chat = chatRepository.findById(chatId)
-			.orElseThrow { IllegalArgumentException("Chat not found") }
+			.orElseThrow { ApiException(ErrorCode.NOT_FOUND, "Chat not found") }
 
 		if (principal.role != UserRole.ADMIN && chat.thread.userId != principal.userId) {
-			throw IllegalArgumentException("Forbidden")
+			throw ApiException(ErrorCode.FORBIDDEN, "Forbidden")
 		}
 
 		if (feedbackRepository.existsByUserIdAndChatId(principal.userId, chatId)) {
-			throw IllegalArgumentException("Feedback already exists")
+			throw ApiException(ErrorCode.CONFLICT, "Feedback already exists")
 		}
 
 		val feedback = Feedback(
@@ -72,7 +74,7 @@ class FeedbackService(
 
 	fun updateStatus(feedbackId: UUID, request: FeedbackStatusUpdateRequest): FeedbackResponse {
 		val feedback = feedbackRepository.findById(feedbackId)
-			.orElseThrow { IllegalArgumentException("Feedback not found") }
+			.orElseThrow { ApiException(ErrorCode.NOT_FOUND, "Feedback not found") }
 		feedback.status = request.status
 		return feedbackRepository.save(feedback).toResponse()
 	}
