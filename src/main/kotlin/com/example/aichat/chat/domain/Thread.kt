@@ -19,7 +19,13 @@ class Thread(
 	var userId: UUID,
 
 	@Column(nullable = false)
-	var lastQuestionAt: Instant
+	var lastQuestionAt: Instant,
+
+	@Column(columnDefinition = "text")
+	var summary: String? = null,
+
+	@Column(name = "summary_updated_at")
+	var summaryUpdatedAt: Instant? = null
 ) : BaseEntity() {
 	@Id
 	@GeneratedValue(strategy = GenerationType.UUID)

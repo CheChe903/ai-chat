@@ -34,12 +34,14 @@ class ChatService(
 	private val activityLogService: ActivityLogService
 ) {
 	private val threadTimeout = Duration.ofMinutes(30)
+	private val summaryTriggerCount = 12
+	private val recentKeepCount = 6
 
 	fun createChat(request: ChatCreateRequest): ChatResponse {
 		val principal = currentUser()
 		val now = Instant.now()
 		val thread = resolveThread(principal.userId, now)
-		val messages = buildMessages(thread, request.question)
+		val messages = buildMessages(thread, request.question, request.model)
 		val completion = llmClient.createChatCompletion(messages, request.model)
 		val answer = completion.choices.firstOrNull()?.message?.content ?: ""
 
@@ -63,7 +65,7 @@ class ChatService(
 		val principal = currentUser()
 		val now = Instant.now()
 		val thread = resolveThread(principal.userId, now)
-		val messages = buildMessages(thread, request.question)
+		val messages = buildMessages(thread, request.question, request.model)
 		val buffer = StringBuilder()
 		val finished = AtomicBoolean(false)
 
@@ -162,15 +164,76 @@ class ChatService(
 		return latest
 	}
 
-	private fun buildMessages(thread: Thread, question: String): List<LlmMessage> {
+	private fun buildMessages(thread: Thread, question: String, modelOverride: String?): List<LlmMessage> {
 		val history = chatRepository.findByThreadId(thread.id!!, Sort.by(Sort.Direction.ASC, "createdAt"))
+		val summary = summarizeIfNeeded(thread, history, modelOverride)
+		val recentChats = if (history.size > recentKeepCount) {
+			history.takeLast(recentKeepCount)
+		} else {
+			history
+		}
+
 		val messages = mutableListOf<LlmMessage>()
-		for (chat in history) {
+		if (!summary.isNullOrBlank()) {
+			messages.add(LlmMessage(role = "system", content = "Conversation summary: $summary"))
+		}
+		for (chat in recentChats) {
 			messages.add(LlmMessage(role = "user", content = chat.question))
 			messages.add(LlmMessage(role = "assistant", content = chat.answer))
 		}
 		messages.add(LlmMessage(role = "user", content = question))
 		return messages
+	}
+
+	private fun summarizeIfNeeded(
+		thread: Thread,
+		history: List<Chat>,
+		modelOverride: String?
+	): String? {
+		if (history.size <= summaryTriggerCount) {
+			return thread.summary
+		}
+		val cutoffIndex = history.size - recentKeepCount
+		if (cutoffIndex <= 0) {
+			return thread.summary
+		}
+		val candidates = history.subList(0, cutoffIndex)
+		val newChats = if (thread.summaryUpdatedAt == null) {
+			candidates
+		} else {
+			candidates.filter { it.createdAt.isAfter(thread.summaryUpdatedAt) }
+		}
+		if (newChats.isEmpty()) {
+			return thread.summary
+		}
+
+		val summaryMessages = mutableListOf<LlmMessage>()
+		summaryMessages.add(
+			LlmMessage(
+				role = "system",
+				content = "Summarize the conversation into concise bullet points. Include decisions, preferences, constraints, and open questions."
+			)
+		)
+		if (!thread.summary.isNullOrBlank()) {
+			summaryMessages.add(
+				LlmMessage(role = "system", content = "Existing summary: ${thread.summary}")
+			)
+		}
+		val content = buildString {
+			for (chat in newChats) {
+				append("User: ").append(chat.question).append("\n")
+				append("Assistant: ").append(chat.answer).append("\n")
+			}
+		}
+		summaryMessages.add(LlmMessage(role = "user", content = content))
+
+		val summaryResponse = llmClient.createChatCompletion(summaryMessages, modelOverride)
+		val summaryText = summaryResponse.choices.firstOrNull()?.message?.content ?: thread.summary
+
+		thread.summary = summaryText
+		thread.summaryUpdatedAt = newChats.last().createdAt
+		threadRepository.save(thread)
+		return summaryText
 	}
 
 	private fun Chat.toResponse(): ChatResponse {
