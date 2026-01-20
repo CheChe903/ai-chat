@@ -1,6 +1,6 @@
 package com.example.aichat.config
 
-import com.example.aichat.auth.JwtAuthenticationFilter
+import com.example.aichat.auth.security.JwtAuthenticationFilter
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.http.HttpMethod

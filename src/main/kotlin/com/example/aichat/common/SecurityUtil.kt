@@ -1,6 +1,6 @@
 package com.example.aichat.common
 
-import com.example.aichat.auth.UserPrincipal
+import com.example.aichat.auth.security.UserPrincipal
 import org.springframework.security.core.context.SecurityContextHolder
 
 object SecurityUtil {
