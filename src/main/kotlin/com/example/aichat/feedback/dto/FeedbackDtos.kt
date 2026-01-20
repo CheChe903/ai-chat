@@ -1,5 +1,6 @@
 package com.example.aichat.feedback.dto
 
+import com.example.aichat.feedback.domain.FeedbackStatus
 import jakarta.validation.constraints.NotNull
 
 class FeedbackCreateRequest(

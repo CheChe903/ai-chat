@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:15.8
+    container_name: ai-chat-postgres
+    environment:
+      POSTGRES_DB: ai_chat
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - ai_chat_pgdata:/var/lib/postgresql/data
+
+volumes:
+  ai_chat_pgdata:

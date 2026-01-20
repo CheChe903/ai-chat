@@ -5,12 +5,13 @@ Kotlin + Spring Boot 기반의 AI 챗봇 서비스 데모입니다.
 ## Requirements
 
 - JDK 17
-- PostgreSQL 15.8+
+- Docker (for local Postgres)
 - OpenAI API Key (유료 API 플랜 필요)
 
 ## Quick Start
 
 ```bash
+docker compose up -d
 ./gradlew bootRun
 ```
 
