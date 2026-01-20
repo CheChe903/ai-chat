@@ -18,7 +18,7 @@ spring:
 app:
   jwt:
     issuer: ai-chat
-    secret: ${JWT_SECRET:change-me-in-prod}
+    secret: ${JWT_SECRET:change-me-in-prod-change-me-in-prod-change-me-in-prod}
     access-token-minutes: 60
   openai:
     api-key: ${OPENAI_API_KEY:}
