@@ -1,12 +1,11 @@
 package com.example.aichat.chat
 
-import com.example.aichat.auth.UserPrincipal
+import com.example.aichat.common.SecurityUtil
 import com.example.aichat.openai.ChatMessage
 import com.example.aichat.openai.OpenAiClient
 import com.example.aichat.user.UserRole
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Sort
-import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.stereotype.Service
 import java.time.Duration
 import java.time.Instant
@@ -107,12 +106,5 @@ class ChatService(
 		)
 	}
 
-	private fun currentUser(): UserPrincipal {
-		val auth = SecurityContextHolder.getContext().authentication
-		val principal = auth?.principal
-		if (principal !is UserPrincipal) {
-			throw IllegalArgumentException("Unauthorized")
-		}
-		return principal
-	}
+	private fun currentUser() = SecurityUtil.currentUser()
 }
